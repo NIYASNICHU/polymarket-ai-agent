@@ -1,0 +1,26 @@
+# Dockerfile.rust
+FROM rust:1.80-slim as builder
+
+# Install libpq and pkg-config for Diesel Postgres feature
+RUN apt-get update && apt-get install -y libpq-dev pkg-config && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+COPY . .
+
+# Build the required binaries
+RUN cargo build --release --bin agent
+RUN cargo build --release --bin api
+
+FROM debian:bookworm-slim
+
+# Install postgres client libraries required by Diesel
+RUN apt-get update && apt-get install -y libpq5 ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the built binaries
+COPY --from=builder /usr/src/app/target/release/agent /usr/local/bin/agent
+COPY --from=builder /usr/src/app/target/release/api /usr/local/bin/api
+
+# Default to agent
+CMD ["agent"]

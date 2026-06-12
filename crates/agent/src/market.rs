@@ -47,6 +47,7 @@ pub async fn fetch_active_markets(
     api_url: &str,
     min_volume_24h: f64,
     max_markets: usize,
+    bet_ids: &std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
 ) -> Result<Vec<RawMarket>> {
     let mut markets = Vec::new();
     let mut offset = 0usize;
@@ -74,6 +75,14 @@ pub async fn fetch_active_markets(
         let fetched = resp.len();
 
         for gm in resp {
+            let gm_id = gm.condition_id.clone();
+            {
+                let ids = bet_ids.lock().unwrap();
+                if ids.contains(&gm_id) {
+                    continue;
+                }
+            }
+
             match parse_active_market(gm, min_volume_24h) {
                 Ok(m) => {
                     markets.push(m);

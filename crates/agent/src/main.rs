@@ -1,6 +1,7 @@
 mod config;
 mod market;
 mod recorder;
+mod relayer;
 mod trader;
 
 use std::{
@@ -131,6 +132,18 @@ async fn main() -> Result<()> {
         "agent starting"
     );
 
+    info!("Starting gasless token approvals (USDC & CTF Exchange) via Relayer...");
+    if let Err(e) = relayer::init_approvals(
+        &http,
+        &std::env::var("RELAYER_API_KEY").unwrap_or_default(),
+        &std::env::var("RELAYER_API_KEY_ADDRESS").unwrap_or_default(),
+        &cfg.polymarket_private_key,
+    ).await {
+        warn!("Relayer approvals failed: {e}. If this is a new wallet, trades may fail.");
+    } else {
+        info!("Relayer approvals confirmed.");
+    }
+
     // ── Main loop ─────────────────────────────────────────────────────────────
     loop {
         match run_cycle(
@@ -165,7 +178,7 @@ async fn run_cycle(
     bet_ids: Arc<Mutex<HashSet<String>>>,
 ) -> Result<usize> {
     let markets =
-        market::fetch_active_markets(http, &cfg.polymarket_api_url, cfg.min_volume_24h, 100)
+        market::fetch_active_markets(http, &cfg.polymarket_api_url, cfg.min_volume_24h, 100, &bet_ids)
             .await?;
 
     if markets.is_empty() {

@@ -1,6 +1,17 @@
 -- Your SQL goes here
 -- migrations/2026-04-07-000003_training_pipeline/up.sql
 
+CREATE TABLE jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model_id TEXT,
+    status TEXT
+);
+
+CREATE TABLE models (
+    id TEXT PRIMARY KEY,
+    name TEXT
+);
+
 -- ── Market snapshots — hourly captures of live market state ──────────────────
 CREATE TABLE market_snapshots (
     id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

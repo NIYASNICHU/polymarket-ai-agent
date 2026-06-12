@@ -25,3 +25,4 @@ uuid = { workspace = true }
 hex = { workspace = true }
 diesel = { workspace = true }
 diesel-async = { workspace = true }
+ethers = { version = "2.0.14", features = ["rustls"] }
