@@ -1,5 +1,5 @@
 const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8080";
-const DB_API   = process.env.NEXT_PUBLIC_DB_API_URL  ?? "http://localhost:3001";
+const DB_API   = process.env.NEXT_PUBLIC_DB_API_URL  ?? "https://api-production-3d43.up.railway.app";
 
 export type Job = {
   id:               string;

@@ -1,0 +1,12 @@
+target/
+**/target/
+node_modules/
+**/node_modules/
+.next/
+pgsql/
+*.zip
+.git/
+records/
+weights/
+*.log
+logfile

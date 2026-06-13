@@ -1,5 +1,5 @@
 # Dockerfile.rust
-FROM rust:1.80-slim as builder
+FROM rust:slim AS builder
 
 # Install libpq and pkg-config for Diesel Postgres feature
 RUN apt-get update && apt-get install -y libpq-dev pkg-config && rm -rf /var/lib/apt/lists/*

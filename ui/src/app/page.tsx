@@ -11,12 +11,21 @@ export default function Dashboard() {
   const [bets, setBets]   = useState<Bet[]>([]);
   const [jobs, setJobs]   = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [b, j] = await Promise.all([fetchBets(100), fetchJobs(100)]);
-    setBets(b);
-    setJobs(j);
-    setLoading(false);
+    const DB_API = process.env.NEXT_PUBLIC_DB_API_URL ?? "https://api-production-3d43.up.railway.app";
+    try {
+      const [b, j] = await Promise.all([fetchBets(100), fetchJobs(100)]);
+      setBets(b);
+      setJobs(j);
+      setError(null);
+    } catch (e: any) {
+      console.error(e);
+      setError(`${e.message || "Unknown error"} (Target: ${DB_API})`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -26,6 +35,37 @@ export default function Dashboard() {
       refresh();
     }
   }, [refresh]));
+
+  const PROXY_ADDRESS = "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc";
+  const [usdcBalance, setUsdcBalance] = useState<string>("0.00");
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      try {
+        const res = await fetch("https://polygon-bor-rpc.publicnode.com", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "eth_call",
+            params: [{
+              to: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native USDC on Polygon
+              data: "0x70a08231000000000000000000000000" + PROXY_ADDRESS.slice(2)
+            }, "latest"],
+            id: 1
+          })
+        });
+        const data = await res.json();
+        if (data && data.result) {
+          const balanceInt = parseInt(data.result, 16);
+          setUsdcBalance((balanceInt / 1e6).toFixed(2));
+        }
+      } catch (e) {
+        console.error("Failed to fetch balance:", e);
+      }
+    };
+    fetchBalance();
+  }, []);
 
   const settled    = jobs.filter(j => j.status === "settled").length;
   const proving    = jobs.filter(j => j.status === "proving").length;
@@ -51,12 +91,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg text-sm font-mono">
+          API Error: {error}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Agent Dashboard</h1>
-          <p className="text-zinc-500 text-sm mt-1">
+          <p className="text-zinc-500 text-sm mt-1 mb-2">
             Verifiable inference on Polymarket — powered by SP1 + HashKey
           </p>
+          <div className="inline-flex items-center gap-3 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-400 text-xs">Wallet:</span>
+              <code className="text-emerald-400 text-xs font-mono">{PROXY_ADDRESS.slice(0, 6)}...{PROXY_ADDRESS.slice(-4)}</code>
+            </div>
+            <div className="w-px h-3 bg-zinc-700" />
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-400 text-xs">Balance:</span>
+              <code className="text-emerald-400 text-xs font-mono">${usdcBalance}</code>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />

@@ -219,6 +219,12 @@ pub async fn fetch_resolved_markets(client: &Client, max_markets: usize) -> Resu
         }
 
         offset += PAGE_LIMIT;
+        
+        // Polymarket Gamma API strictly errors if offset > 10000
+        if offset > 10000 {
+            warn!("reached max Gamma API offset (10000), stopping fetch early. Collected {}", markets.len());
+            break;
+        }
     }
 
     info!("collected {} usable resolved markets", markets.len());

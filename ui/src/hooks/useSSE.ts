@@ -12,7 +12,7 @@ export function useSSE(onEvent: (event: SSEEvent) => void) {
   onEventRef.current = onEvent;
 
   useEffect(() => {
-    const url = `${process.env.NEXT_PUBLIC_DB_API_URL ?? "http://localhost:3001"}/events`;
+    const url = `${process.env.NEXT_PUBLIC_DB_API_URL ?? "https://api-production-3d43.up.railway.app"}/events`;
     let es: EventSource;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
