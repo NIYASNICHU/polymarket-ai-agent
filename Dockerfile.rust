@@ -21,6 +21,7 @@ WORKDIR /app
 # Copy the built binaries
 COPY --from=builder /usr/src/app/target/release/agent /usr/local/bin/agent
 COPY --from=builder /usr/src/app/target/release/api /usr/local/bin/api
+COPY --from=builder /usr/src/app/weights ./weights
 
 # Default to agent
 CMD ["agent"]
