@@ -7,6 +7,5 @@ pgsql/
 *.zip
 .git/
 records/
-weights/
 *.log
 logfile
