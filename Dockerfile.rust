@@ -23,5 +23,8 @@ COPY --from=builder /usr/src/app/target/release/agent /usr/local/bin/agent
 COPY --from=builder /usr/src/app/target/release/api /usr/local/bin/api
 COPY --from=builder /usr/src/app/weights ./weights
 
-# Default to agent
-CMD ["agent"]
+# Copy the entrypoint script
+COPY --from=builder /usr/src/app/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+CMD ["/usr/local/bin/entrypoint.sh"]
