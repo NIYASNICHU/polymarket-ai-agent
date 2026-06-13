@@ -105,3 +105,5 @@ temp/
 # =========================
 *.bak
 *.old
+pgsql/
+postgresql-14.15-1-osx-binaries.zip

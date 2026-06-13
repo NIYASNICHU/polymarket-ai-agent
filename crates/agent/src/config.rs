@@ -49,8 +49,22 @@ impl Config {
             polymarket_private_key: std::env::var("POLYMARKET_PRIVATE_KEY")
                 .map_err(|_| anyhow!("POLYMARKET_PRIVATE_KEY must be set"))?,
 
-            polymarket_proxy: std::env::var("POLYMARKET_PROXY_ADDRESS")
-                .map_err(|_| anyhow!("POLYMARKET_PROXY_ADDRESS must be set"))?,
+            polymarket_proxy: std::env::var("POLYMARKET_PROXY_ADDRESS").unwrap_or_else(|_| {
+                let private_key = std::env::var("POLYMARKET_PRIVATE_KEY").unwrap_or_default();
+                if !private_key.is_empty() {
+                    match common::derivation::derive_eoa_from_private_key(&private_key) {
+                        Ok(owner) => {
+                            let derived = common::derivation::get_default_deposit_wallet_for_eoa(owner);
+                            let derived_str = ethers::utils::to_checksum(&derived, None);
+                            tracing::info!("POLYMARKET_PROXY_ADDRESS not set. Derived deposit wallet: {}", derived_str);
+                            derived_str
+                        }
+                        Err(_) => "".to_string(),
+                    }
+                } else {
+                    "".to_string()
+                }
+            }),
 
             veil_gateway_url: std::env::var("VEIL_GATEWAY_URL")
                 .unwrap_or_else(|_| "http://localhost:8080".into()),

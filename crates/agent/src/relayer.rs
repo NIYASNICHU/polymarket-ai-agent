@@ -74,6 +74,7 @@ pub async fn init_approvals(
     relayer_api_key: &str,
     relayer_api_key_address: &str,
     private_key: &str,
+    proxy_wallet: &str,
 ) -> Result<()> {
     if relayer_api_key.is_empty() || relayer_api_key_address.is_empty() {
         warn!("RELAYER_API_KEY or RELAYER_API_KEY_ADDRESS not set, skipping gasless approvals.");
@@ -154,7 +155,7 @@ pub async fn init_approvals(
     let sig_str = format!("0x{}", signature);
     info!("Generated signature: {}", sig_str);
 
-    let proxy_wallet = "0x585e123CEf250a5771aC598d93eBFA40b0d8b1EC".to_string();
+    let proxy_wallet = proxy_wallet.to_string();
 
     let submit_req = RelayerSubmitRequest {
         to: config.proxy_factory.clone(),

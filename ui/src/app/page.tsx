@@ -36,12 +36,24 @@ export default function Dashboard() {
     }
   }, [refresh]));
 
-  const PROXY_ADDRESS = "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc";
+  const [config, setConfig] = useState<{
+    eoa_address: string;
+    proxy_address: string;
+    deposit_address: string;
+    paper_trading: boolean;
+  } | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<string>("0.00");
 
   useEffect(() => {
-    const fetchBalance = async () => {
+    const fetchConfigAndBalance = async () => {
       try {
+        const DB_API = process.env.NEXT_PUBLIC_DB_API_URL ?? "https://api-production-3d43.up.railway.app";
+        const configRes = await fetch(`${DB_API}/config`);
+        if (!configRes.ok) throw new Error("Failed to fetch config");
+        const configData = await configRes.json();
+        setConfig(configData);
+
+        const walletToQuery = configData.deposit_address || configData.proxy_address || "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc";
         const res = await fetch("https://polygon-bor-rpc.publicnode.com", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -49,8 +61,8 @@ export default function Dashboard() {
             jsonrpc: "2.0",
             method: "eth_call",
             params: [{
-              to: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // Native USDC on Polygon
-              data: "0x70a08231000000000000000000000000" + PROXY_ADDRESS.slice(2)
+              to: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // Bridged USDC (USDC.e) on Polygon
+              data: "0x70a08231000000000000000000000000" + walletToQuery.toLowerCase().slice(2)
             }, "latest"],
             id: 1
           })
@@ -61,10 +73,10 @@ export default function Dashboard() {
           setUsdcBalance((balanceInt / 1e6).toFixed(2));
         }
       } catch (e) {
-        console.error("Failed to fetch balance:", e);
+        console.error("Failed to fetch config or balance:", e);
       }
     };
-    fetchBalance();
+    fetchConfigAndBalance();
   }, []);
 
   const settled    = jobs.filter(j => j.status === "settled").length;
@@ -102,16 +114,40 @@ export default function Dashboard() {
           <p className="text-zinc-500 text-sm mt-1 mb-2">
             Verifiable inference on Polymarket — powered by SP1 + HashKey
           </p>
-          <div className="inline-flex items-center gap-3 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-400 text-xs">Wallet:</span>
-              <code className="text-emerald-400 text-xs font-mono">{PROXY_ADDRESS.slice(0, 6)}...{PROXY_ADDRESS.slice(-4)}</code>
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            {config?.eoa_address && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-800/40 rounded-full border border-zinc-700/30">
+                <span className="text-zinc-500 text-xs uppercase tracking-wider">EOA:</span>
+                <code className="text-zinc-300 text-xs font-mono" title={config.eoa_address}>
+                  {config.eoa_address.slice(0, 6)}...{config.eoa_address.slice(-4)}
+                </code>
+              </div>
+            )}
+            
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
+              <span className="text-zinc-400 text-xs uppercase tracking-wider">Deposit Wallet:</span>
+              <code className="text-emerald-400 text-xs font-mono" title={config?.deposit_address || "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc"}>
+                {(config?.deposit_address || "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc").slice(0, 6)}...
+                {(config?.deposit_address || "0xDb944cbfF21825eE0606880b4feb52A7E47c71cc").slice(-4)}
+              </code>
             </div>
-            <div className="w-px h-3 bg-zinc-700" />
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-400 text-xs">Balance:</span>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-800/50 rounded-full border border-zinc-700/50">
+              <span className="text-zinc-400 text-xs uppercase tracking-wider">USDC.e Balance:</span>
               <code className="text-emerald-400 text-xs font-mono">${usdcBalance}</code>
             </div>
+
+            {config && (
+              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+                config.paper_trading 
+                  ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
+                  : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+              }`}>
+                <span className="text-xs font-mono uppercase tracking-wider">
+                  {config.paper_trading ? "Paper" : "Live"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">

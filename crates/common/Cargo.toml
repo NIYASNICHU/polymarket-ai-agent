@@ -19,3 +19,5 @@ thiserror    = { workspace = true }
 dotenvy      = { workspace = true }
 tracing      = { workspace = true }
 tokio        = { workspace = true }
+ethers       = { workspace = true }
+hex          = { workspace = true }

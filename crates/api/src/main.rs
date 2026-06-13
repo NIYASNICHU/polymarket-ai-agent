@@ -47,10 +47,54 @@ struct AppState {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
+#[derive(serde::Serialize)]
+struct ConfigResponse {
+    eoa_address: String,
+    proxy_address: String,
+    deposit_address: String,
+    paper_trading: bool,
+}
+
+#[get("/config")]
+async fn get_config() -> impl Responder {
+    let private_key = std::env::var("POLYMARKET_PRIVATE_KEY").unwrap_or_default();
+    let proxy_address = std::env::var("POLYMARKET_PROXY_ADDRESS").unwrap_or_default();
+    let paper_trading = std::env::var("PAPER_TRADING")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(true);
+
+    let eoa_address = if !private_key.is_empty() {
+        match common::derivation::derive_eoa_from_private_key(&private_key) {
+            Ok(addr) => ethers::utils::to_checksum(&addr, None),
+            Err(_) => "".to_string(),
+        }
+    } else {
+        "".to_string()
+    };
+
+    let deposit_address = if !eoa_address.is_empty() {
+        if let Ok(owner_addr) = eoa_address.parse::<ethers::types::Address>() {
+            ethers::utils::to_checksum(&common::derivation::get_default_deposit_wallet_for_eoa(owner_addr), None)
+        } else {
+            "".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+
+    HttpResponse::Ok().json(ConfigResponse {
+        eoa_address,
+        proxy_address,
+        deposit_address,
+        paper_trading,
+    })
+}
+
 #[get("/healthz")]
 async fn healthz() -> impl Responder {
     HttpResponse::Ok().json(serde_json::json!({ "status": "ok" }))
 }
+
 
 #[get("/jobs")]
 async fn list_jobs(state: Data<AppState>, q: Query<JobsQuery>) -> impl Responder {
@@ -234,11 +278,13 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .wrap(Cors::permissive())
             .service(healthz)
+            .service(get_config)
             .service(list_jobs)
             .service(get_job)
             .service(list_bets)
             .service(get_bet)
             .service(sse_stream)
+
     })
     .bind((host.as_str(), port))?
     .run()

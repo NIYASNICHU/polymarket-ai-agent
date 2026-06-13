@@ -9,6 +9,11 @@ edition = "2021"
 name = "agent"
 path = "src/main.rs"
 
+[[bin]]
+name = "test_derive"
+path = "src/test_derive.rs"
+
+
 [dependencies]
 common = { path = "../common" }
 model = { path = "../model" }
@@ -25,4 +30,4 @@ uuid = { workspace = true }
 hex = { workspace = true }
 diesel = { workspace = true }
 diesel-async = { workspace = true }
-ethers = { version = "2.0.14", features = ["rustls"] }
+ethers = { workspace = true }

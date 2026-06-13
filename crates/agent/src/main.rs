@@ -138,6 +138,7 @@ async fn main() -> Result<()> {
         &std::env::var("RELAYER_API_KEY").unwrap_or_default(),
         &std::env::var("RELAYER_API_KEY_ADDRESS").unwrap_or_default(),
         &cfg.polymarket_private_key,
+        &cfg.polymarket_proxy,
     ).await {
         warn!("Relayer approvals failed: {e}. If this is a new wallet, trades may fail.");
     } else {
