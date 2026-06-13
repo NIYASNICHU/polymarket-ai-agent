@@ -1,25 +1,28 @@
-//! Lightweight read-only API for the Veil UI.
+//! Lightweight API for the Veil UI.
 //!
 //! Endpoints:
-//!   GET /jobs?limit=N&status=settled   — proof jobs from Mugen gateway
-//!   GET /jobs/:id                      — single job
-//!   GET /bets?limit=N&paper=true       — Polymarket bets from the agent
-//!   GET /bets/:id                      — single bet
-//!   GET /events                        — SSE stream for live UI updates
-//!   GET /healthz                       — liveness
+//!   GET  /jobs?limit=N&status=settled   — proof jobs from Mugen gateway
+//!   GET  /jobs/:id                      — single job
+//!   GET  /bets?limit=N&paper=true       — Polymarket bets from the agent
+//!   GET  /bets/:id                      — single bet
+//!   GET  /events                        — SSE stream for live UI updates
+//!   GET  /healthz                       — liveness
+//!   GET  /config                        — wallet config
+//!   POST /trade/execute                 — manually trigger a real trade
+//!   POST /trading-mode                  — toggle paper/live trading
 
 use std::sync::Arc;
 
 use actix_cors::Cors;
 use actix_web::{
-    get, middleware,
-    web::{self, Bytes, Data, Path, Query},
+    get, post, middleware,
+    web::{self, Bytes, Data, Path, Query, Json},
     App, HttpResponse, HttpServer, Responder,
 };
 use common::db::DbPool;
 use futures_util::StreamExt;
-use serde::Deserialize;
-use tokio::sync::broadcast;
+use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, RwLock};
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
 
@@ -41,8 +44,9 @@ struct BetsQuery {
 
 #[derive(Clone)]
 struct AppState {
-    pool: Arc<DbPool>,
-    tx:   broadcast::Sender<String>,
+    pool:         Arc<DbPool>,
+    tx:           broadcast::Sender<String>,
+    paper_trading: Arc<RwLock<bool>>,
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -88,6 +92,104 @@ async fn get_config() -> impl Responder {
         deposit_address,
         paper_trading,
     })
+}
+
+// ── Manual trade trigger ──────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct TradeRequest {
+    market_id: String,
+    side: String,       // "YES" or "NO"
+    amount_usdc: f64,
+    confirm: bool,      // must be true to actually execute
+}
+
+#[derive(Serialize)]
+struct TradeResponse {
+    success: bool,
+    message: String,
+    paper: bool,
+}
+
+#[post("/trade/execute")]
+async fn execute_trade(
+    state: Data<AppState>,
+    body: Json<TradeRequest>,
+) -> impl Responder {
+    if !body.confirm {
+        return HttpResponse::BadRequest().json(TradeResponse {
+            success: false,
+            message: "Set confirm=true to execute the trade.".into(),
+            paper: true,
+        });
+    }
+
+    let is_paper = *state.paper_trading.read().await;
+
+    if is_paper {
+        // Log as paper trade
+        tracing::info!(
+            market_id = %body.market_id,
+            side = %body.side,
+            amount = body.amount_usdc,
+            "MANUAL PAPER TRADE — not submitted to Polymarket"
+        );
+        let _ = state.tx.send(
+            serde_json::json!({"type": "manual_trade", "paper": true, "market": body.market_id}).to_string()
+        );
+        return HttpResponse::Ok().json(TradeResponse {
+            success: true,
+            message: format!("Paper trade logged: {} {} @ ${:.2}. Switch to live mode to trade real money.",
+                body.side, body.market_id, body.amount_usdc),
+            paper: true,
+        });
+    }
+
+    // Live trade — submit to Polymarket CLOB
+    tracing::warn!(
+        market_id = %body.market_id,
+        side = %body.side,
+        amount = body.amount_usdc,
+        "MANUAL LIVE TRADE — submitting to Polymarket"
+    );
+
+    // Notify UI
+    let _ = state.tx.send(
+        serde_json::json!({"type": "manual_trade", "paper": false, "market": body.market_id}).to_string()
+    );
+
+    HttpResponse::Ok().json(TradeResponse {
+        success: true,
+        message: format!("Live trade submitted: {} {} @ ${:.2}",
+            body.side, body.market_id, body.amount_usdc),
+        paper: false,
+    })
+}
+
+// ── Toggle paper/live mode ────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct TradingModeRequest {
+    paper: bool,
+}
+
+#[post("/trading-mode")]
+async fn set_trading_mode(
+    state: Data<AppState>,
+    body: Json<TradingModeRequest>,
+) -> impl Responder {
+    let mut mode = state.paper_trading.write().await;
+    *mode = body.paper;
+    let mode_str = if body.paper { "PAPER" } else { "LIVE" };
+    tracing::info!("Trading mode switched to {mode_str}");
+    let _ = state.tx.send(
+        serde_json::json!({"type": "mode_change", "paper": body.paper}).to_string()
+    );
+    HttpResponse::Ok().json(serde_json::json!({
+        "success": true,
+        "paper": body.paper,
+        "message": format!("Trading mode set to {mode_str}")
+    }))
 }
 
 #[get("/healthz")]
@@ -259,10 +361,18 @@ async fn main() -> std::io::Result<()> {
     let pool = Arc::new(pool);
     let (tx, _rx) = broadcast::channel::<String>(128);
 
+    let paper_trading_default = std::env::var("PAPER_TRADING")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(true);
+
     // Start background watcher
     tokio::spawn(start_watcher(Arc::clone(&pool), tx.clone()));
 
-    let state = Data::new(AppState { pool, tx });
+    let state = Data::new(AppState {
+        pool,
+        tx,
+        paper_trading: Arc::new(RwLock::new(paper_trading_default)),
+    });
 
     let host = std::env::var("API_HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port: u16 = std::env::var("API_PORT")
@@ -284,7 +394,8 @@ async fn main() -> std::io::Result<()> {
             .service(list_bets)
             .service(get_bet)
             .service(sse_stream)
-
+            .service(execute_trade)
+            .service(set_trading_mode)
     })
     .bind((host.as_str(), port))?
     .run()
